@@ -1,0 +1,127 @@
+name: Build PDFium WASM
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    
+    steps:
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 4096
+        swap-size-mb: 2048
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Install base dependencies (equivalent to emsdk-base stage)
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config autoconf automake libtool ragel git yasm \
+          subversion lsb-release tzdata keyboard-configuration \
+          build-essential cmake python3 python3-pip
+        
+        # Set timezone
+        echo "America/Sao_Paulo" | sudo tee /etc/timezone
+        sudo dpkg-reconfigure -f noninteractive tzdata
+        echo 'LANG="en_US.UTF-8"' | sudo tee /etc/default/locale
+
+    # Install Node.js (equivalent to node-setup stage)
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    # Install Emscripten SDK
+    - name: Cache Emscripten SDK
+      uses: actions/cache@v4
+      id: emsdk-cache
+      with:
+        path: /opt/emsdk
+        key: emsdk-4.0.10-${{ runner.os }}
+
+    - name: Install Emscripten SDK
+      if: steps.emsdk-cache.outputs.cache-hit != 'true'
+      run: |
+        cd /opt
+        sudo git clone https://github.com/emscripten-core/emsdk.git
+        cd emsdk
+        sudo ./emsdk install 4.0.10
+        sudo ./emsdk activate 4.0.10
+
+    - name: Setup Emscripten environment
+      run: |
+        echo "/opt/emsdk" >> $GITHUB_PATH
+        echo "EMSDK=/opt/emsdk" >> $GITHUB_ENV
+        echo "EM_CONFIG=/opt/emsdk/.emscripten" >> $GITHUB_ENV
+        echo "INSTALL_DIR=/opt" >> $GITHUB_ENV
+        echo "CFLAGS=-I/opt/include $CFLAGS" >> $GITHUB_ENV
+        echo "CXXFLAGS=-I/opt/include $CXXFLAGS" >> $GITHUB_ENV
+        echo "LDFLAGS=-L/opt/lib $LDFLAGS" >> $GITHUB_ENV
+        echo "EM_PKG_CONFIG_PATH=/opt/lib/pkgconfig:/opt/emsdk/upstream/emscripten/system/lib/pkgconfig" >> $GITHUB_ENV
+        echo "EM_TOOLCHAIN_FILE=/opt/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" >> $GITHUB_ENV
+        source /opt/emsdk/emsdk_env.sh
+
+    # Install depot_tools (equivalent to depot-tools stage)
+    - name: Cache depot_tools
+      uses: actions/cache@v4
+      id: depot-tools-cache
+      with:
+        path: /opt/depot_tools
+        key: depot-tools-${{ runner.os }}-${{ github.run_id }}
+        restore-keys: |
+          depot-tools-${{ runner.os }}-
+
+    - name: Install depot_tools
+      if: steps.depot-tools-cache.outputs.cache-hit != 'true'
+      run: |
+        cd /opt
+        sudo git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git -b main depot_tools
+
+    - name: Setup depot_tools
+      run: |
+        echo "/opt/depot_tools" >> $GITHUB_PATH
+        export PATH="/opt/depot_tools:$PATH"
+
+    # Get PDFium source (equivalent to pdfium-src stage)
+    - name: Cache PDFium source
+      uses: actions/cache@v4
+      id: pdfium-cache
+      with:
+        path: /tmp/pdfium-build
+        key: pdfium-src-chromium-7267-v2
+        restore-keys: |
+          pdfium-src-chromium-7267-
+          pdfium-src-
+
+    - name: Download PDFium source
+      if: steps.pdfium-cache.outputs.cache-hit != 'true'
+      run: |
+        export PATH="/opt/depot_tools:$PATH"
+        mkdir -p /tmp/pdfium-build
+        cd /tmp/pdfium-build
+        gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git
+        gclient sync -r origin/chromium/7267 --no-history --shallow
+
+    # Install PDFium build dependencies (equivalent to pdfium-deps stage)
+    - name: Install PDFium build dependencies
+      run: |
+        cd /tmp/pdfium-build
+        bash -x ./pdfium/build/install-build-deps.sh --no-prompt
+
+    - name: Generate build summary
+      run: |
+        echo "## PDFium Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Time**: $(date)" >> $GITHUB_STEP_SUMMARY
