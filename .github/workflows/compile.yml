@@ -46,3 +46,22 @@ jobs:
       run: |
         cd /tmp/pdfium-build
         bash -x ./pdfium/build/install-build-deps.sh --no-prompt
+
+    - name: emscripten
+      run: |
+        cd /tmp/pdfium-build/pdfium/third_party
+        git clone https://github.com/emscripten-core/emsdk.git
+        cd emsdk
+        ./emsdk install 4.0.10
+        ./emsdk activate 4.0.10
+     
+    - name: Apply patches
+      run: |
+        cd /tmp/pdfium-build
+        # Copy patch files to their corresponding locations in the PDFium source
+        cp -r $GITHUB_WORKSPACE/patches/pdfium/* pdfium/
+        echo "Applied patches to PDFium source code"
+    
+    - name: Compile PDFium
+      run: |
+        ./compile.sh
