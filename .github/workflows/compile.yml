@@ -24,10 +24,23 @@ jobs:
       id: depot-tools-cache
       with:
         path: /opt/depot_tools
-        key: depot-tools
+        key: depot-tools-v1-${{ runner.os }}
+        restore-keys: |
+          depot-tools-v1-
+
+    - name: Verify depot_tools cache
+      id: verify-depot-tools
+      run: |
+        if [ -d "/opt/depot_tools" ] && [ -f "/opt/depot_tools/gclient" ]; then
+          echo "depot-tools-exists=true" >> $GITHUB_OUTPUT
+          echo "depot_tools found in cache and verified"
+        else
+          echo "depot-tools-exists=false" >> $GITHUB_OUTPUT
+          echo "depot_tools not found or incomplete in cache"
+        fi
 
     - name: Install depot_tools
-      if: steps.depot-tools-cache.outputs.cache-hit != 'true'
+      if: steps.verify-depot-tools.outputs.depot-tools-exists != 'true'
       run: |
         cd /opt
         git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
