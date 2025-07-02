@@ -75,7 +75,15 @@ jobs:
         cd /tmp/pdfium-build/pdfium
         ninja -C out/prod pdfium -v
     
-    - name: Compile PDFium
+    - name: Compile WASM
       run: |
         source /tmp/pdfium-build/pdfium/third_party/emsdk/emsdk_env.sh
         ./compile.sh
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: pdfium-wasm
+        path: |
+          pdfium.js
+          pdfium.wasm
