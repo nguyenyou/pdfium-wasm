@@ -1,13 +1,7 @@
 name: Build PDFium WASM
 
 on:
-  workflow_dispatch:
-    inputs:
-      force_clean_cache:
-        description: 'Force clean cache run (ignore all caches)'
-        required: false
-        default: false
-        type: boolean
+  workflow_dispatch
 
 jobs:
   build:
@@ -18,15 +12,37 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Compile PDFium
+    - name: Install depot_tools
       run: |
         cd /opt
         git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+
+    - name: Add depot_tools to PATH
+      run: |
         echo "/opt/depot_tools" >> $GITHUB_PATH
         export PATH="/opt/depot_tools:$PATH"
+
+    - name: Create build directory
+      run: |
         mkdir -p /tmp/pdfium-build
         cd /tmp/pdfium-build
+
+    - name: Configure gclient for PDFium
+      run: |
+        cd /tmp/pdfium-build
         gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git --custom-var checkout_configuration=minimal
+
+    - name: Set WebAssembly target
+      run: |
+        cd /tmp/pdfium-build
         echo "target_os = [ 'emscripten' ]" >> .gclient
+
+    - name: Sync PDFium source code
+      run: |
+        cd /tmp/pdfium-build
         gclient sync -r origin/chromium/7267 --no-history --shallow
+
+    - name: Install build dependencies
+      run: |
+        cd /tmp/pdfium-build
         bash -x ./pdfium/build/install-build-deps.sh --no-prompt
