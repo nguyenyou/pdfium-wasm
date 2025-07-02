@@ -24,9 +24,7 @@ jobs:
       id: depot-tools-cache
       with:
         path: /opt/depot_tools
-        key: depot-tools-${{ runner.os }}
-        restore-keys: |
-          depot-tools-
+        key: depot-tools
 
     - name: Install depot_tools
       if: steps.depot-tools-cache.outputs.cache-hit != 'true'
