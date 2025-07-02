@@ -18,61 +18,15 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Install depot_tools (equivalent to depot-tools stage)
-    - name: Cache depot_tools
-      uses: actions/cache@v4
-      id: depot-tools-cache
-      with:
-        path: /opt/depot_tools
-        key: depot-tools-v1-${{ runner.os }}
-        restore-keys: |
-          depot-tools-v1-
-
-    - name: Verify depot_tools cache
-      id: verify-depot-tools
-      run: |
-        if [ -d "/opt/depot_tools" ] && [ -f "/opt/depot_tools/gclient" ]; then
-          echo "depot-tools-exists=true" >> $GITHUB_OUTPUT
-          echo "depot_tools found in cache and verified"
-        else
-          echo "depot-tools-exists=false" >> $GITHUB_OUTPUT
-          echo "depot_tools not found or incomplete in cache"
-        fi
-
-    - name: Install depot_tools
-      if: steps.verify-depot-tools.outputs.depot-tools-exists != 'true'
+    - name: Compile PDFium
       run: |
         cd /opt
         git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
-
-    - name: Setup depot_tools
-      run: |
         echo "/opt/depot_tools" >> $GITHUB_PATH
-        export PATH="/opt/depot_tools:$PATH"
-
-    # Get PDFium source (equivalent to pdfium-src stage)
-    - name: Cache PDFium source
-      uses: actions/cache@v4
-      id: pdfium-cache
-      with:
-        path: /tmp/pdfium-build
-        key: pdfium-src-chromium-7267-${{ runner.os }}
-        restore-keys: |
-          pdfium-src-chromium-7267-
-          pdfium-src-
-
-    - name: Download PDFium source
-      if: steps.pdfium-cache.outputs.cache-hit != 'true'
-      run: |
         export PATH="/opt/depot_tools:$PATH"
         mkdir -p /tmp/pdfium-build
         cd /tmp/pdfium-build
         gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git --custom-var checkout_configuration=minimal
         echo "target_os = [ 'emscripten' ]" >> .gclient
         gclient sync -r origin/chromium/7267 --no-history --shallow
-
-    # Install PDFium build dependencies (equivalent to pdfium-deps stage)
-    - name: Install PDFium build dependencies
-      run: |
-        cd /tmp/pdfium-build
         bash -x ./pdfium/build/install-build-deps.sh --no-prompt
