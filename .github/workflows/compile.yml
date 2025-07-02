@@ -18,80 +18,21 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Install Node.js (equivalent to node-setup stage)
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-
-    # Install Emscripten SDK
-    - name: Cache Emscripten SDK
-      uses: actions/cache@v4
-      id: emsdk-cache
-      if: ${{ !inputs.force_clean_cache }}
-      with:
-        path: /opt/emsdk
-        key: emsdk-4.0.10-${{ runner.os }}
-        restore-keys: |
-          emsdk-4.0.10-
-
-    - name: Validate Emscripten SDK cache
-      if: steps.emsdk-cache.outputs.cache-hit == 'true' && !inputs.force_clean_cache
-      id: emsdk-validation
-      run: |
-        echo "Validating Emscripten SDK cache..."
-        if [ ! -d "/opt/emsdk" ] || [ ! -f "/opt/emsdk/emsdk" ] || [ ! -f "/opt/emsdk/upstream/emscripten/emcc" ]; then
-          echo "❌ Cache hit but Emscripten SDK not found or invalid"
-          echo "cache_valid=false" >> $GITHUB_OUTPUT
-        else
-          echo "✅ Emscripten SDK cache is valid"
-          echo "📊 Cache size: $(du -sh /opt/emsdk 2>/dev/null || echo 'unknown')"
-          echo "cache_valid=true" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Install Emscripten SDK
-      if: steps.emsdk-cache.outputs.cache-hit != 'true' || steps.emsdk-validation.outputs.cache_valid == 'false' || inputs.force_clean_cache
-      run: |
-        # Clean up any existing installation if cache was invalid
-        sudo rm -rf /opt/emsdk
-        cd /opt
-        git clone https://github.com/emscripten-core/emsdk.git
-        cd emsdk
-        ./emsdk install 4.0.10
-        ./emsdk activate 4.0.10
-
     # Install depot_tools (equivalent to depot-tools stage)
     - name: Cache depot_tools
       uses: actions/cache@v4
       id: depot-tools-cache
-      if: ${{ !inputs.force_clean_cache }}
       with:
         path: /opt/depot_tools
         key: depot-tools-${{ runner.os }}
         restore-keys: |
           depot-tools-
 
-    - name: Validate depot_tools cache
-      if: steps.depot-tools-cache.outputs.cache-hit == 'true' && !inputs.force_clean_cache
-      id: depot-tools-validation
-      run: |
-        echo "Validating depot_tools cache..."
-        if [ ! -d "/opt/depot_tools" ] || [ ! -f "/opt/depot_tools/gclient" ] || [ ! -f "/opt/depot_tools/gn" ]; then
-          echo "❌ Cache hit but depot_tools not found or invalid"
-          echo "cache_valid=false" >> $GITHUB_OUTPUT
-        else
-          echo "✅ depot_tools cache is valid"
-          echo "📊 Cache size: $(du -sh /opt/depot_tools 2>/dev/null || echo 'unknown')"
-          echo "cache_valid=true" >> $GITHUB_OUTPUT
-        fi
-
     - name: Install depot_tools
-      if: steps.depot-tools-cache.outputs.cache-hit != 'true' || steps.depot-tools-validation.outputs.cache_valid == 'false' || inputs.force_clean_cache
+      if: steps.depot-tools-cache.outputs.cache-hit != 'true'
       run: |
-        # Clean up any existing installation if cache was invalid
-        sudo rm -rf /opt/depot_tools
         cd /opt
-        git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git -b main depot_tools
+        git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
 
     - name: Setup depot_tools
       run: |
@@ -102,7 +43,6 @@ jobs:
     - name: Cache PDFium source
       uses: actions/cache@v4
       id: pdfium-cache
-      if: ${{ !inputs.force_clean_cache }}
       with:
         path: /tmp/pdfium-build
         key: pdfium-src-chromium-7267-${{ runner.os }}
@@ -110,25 +50,9 @@ jobs:
           pdfium-src-chromium-7267-
           pdfium-src-
 
-    - name: Validate PDFium source cache
-      if: steps.pdfium-cache.outputs.cache-hit == 'true' && !inputs.force_clean_cache
-      id: pdfium-validation
-      run: |
-        echo "Validating PDFium source cache..."
-        if [ ! -d "/tmp/pdfium-build" ] || [ ! -d "/tmp/pdfium-build/pdfium" ] || [ ! -f "/tmp/pdfium-build/.gclient" ] || [ ! -f "/tmp/pdfium-build/pdfium/BUILD.gn" ]; then
-          echo "❌ Cache hit but PDFium source not found or invalid"
-          echo "cache_valid=false" >> $GITHUB_OUTPUT
-        else
-          echo "✅ PDFium source cache is valid"
-          echo "📊 Cache size: $(du -sh /tmp/pdfium-build 2>/dev/null || echo 'unknown')"
-          echo "cache_valid=true" >> $GITHUB_OUTPUT
-        fi
-
     - name: Download PDFium source
-      if: steps.pdfium-cache.outputs.cache-hit != 'true' || steps.pdfium-validation.outputs.cache_valid == 'false' || inputs.force_clean_cache
+      if: steps.pdfium-cache.outputs.cache-hit != 'true'
       run: |
-        # Clean up any existing source if cache was invalid
-        sudo rm -rf /tmp/pdfium-build
         export PATH="/opt/depot_tools:$PATH"
         mkdir -p /tmp/pdfium-build
         cd /tmp/pdfium-build
@@ -141,15 +65,3 @@ jobs:
       run: |
         cd /tmp/pdfium-build
         bash -x ./pdfium/build/install-build-deps.sh --no-prompt
-
-    # Debug information
-    - name: Cache status summary
-      run: |
-        echo "=== Cache Status Summary ==="
-        echo "Force clean cache: ${{ inputs.force_clean_cache }}"
-        echo "Emscripten SDK cache hit: ${{ steps.emsdk-cache.outputs.cache-hit }}"
-        echo "Emscripten SDK cache valid: ${{ steps.emsdk-validation.outputs.cache_valid }}"
-        echo "depot_tools cache hit: ${{ steps.depot-tools-cache.outputs.cache-hit }}"
-        echo "depot_tools cache valid: ${{ steps.depot-tools-validation.outputs.cache_valid }}"
-        echo "PDFium source cache hit: ${{ steps.pdfium-cache.outputs.cache-hit }}"
-        echo "PDFium source cache valid: ${{ steps.pdfium-validation.outputs.cache_valid }}"
