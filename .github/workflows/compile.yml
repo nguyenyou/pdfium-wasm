@@ -40,7 +40,7 @@ jobs:
     - name: Sync PDFium source code
       run: |
         cd /tmp/pdfium-build
-        gclient sync -r origin/chromium/7267 --no-history --shallow
+        gclient sync -r origin/chromium/7497 --no-history --shallow
 
     - name: Install build dependencies
       run: |
